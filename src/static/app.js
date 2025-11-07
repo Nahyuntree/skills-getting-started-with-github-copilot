@@ -4,20 +4,42 @@ document.addEventListener("DOMContentLoaded", () => {
   const signupForm = document.getElementById("signup-form");
   const messageDiv = document.getElementById("message");
 
+  // Cache for activities data
+  let activitiesCache = null;
+  let lastFetchTime = 0;
+  const CACHE_DURATION = 60000; // 1 minute cache
+
   // Function to fetch activities from API
   async function fetchActivities() {
+    // Return cached data if still valid
+    if (activitiesCache && (Date.now() - lastFetchTime) < CACHE_DURATION) {
+      return activitiesCache;
+    }
+
     try {
       const response = await fetch("/activities");
       const activities = await response.json();
+      activitiesCache = activities;
+      lastFetchTime = Date.now();
+      return activities;
+    } catch (error) {
+      console.error("Error fetching activities:", error);
+      throw error;
+    }
+  }
 
-      // Clear loading message
-      activitiesList.innerHTML = "";
+  // Optimized rendering function
+  async function renderActivities() {
+    try {
+      const activities = await fetchActivities();
+      
+      // Use DocumentFragment for better performance
+      const fragment = document.createDocumentFragment();
+      activitySelect.innerHTML = '<option value="">-- Select an activity --</option>';
 
-      // Populate activities list
       Object.entries(activities).forEach(([name, details]) => {
         const activityCard = document.createElement("div");
         activityCard.className = "activity-card";
-
         const spotsLeft = details.max_participants - details.participants.length;
 
         activityCard.innerHTML = `
@@ -34,7 +56,7 @@ document.addEventListener("DOMContentLoaded", () => {
           </ul>
         `;
 
-        activitiesList.appendChild(activityCard);
+        fragment.appendChild(activityCard);
 
         // Add option to select dropdown
         const option = document.createElement("option");
@@ -42,9 +64,11 @@ document.addEventListener("DOMContentLoaded", () => {
         option.textContent = name;
         activitySelect.appendChild(option);
       });
+
+      activitiesList.innerHTML = "";
+      activitiesList.appendChild(fragment);
     } catch (error) {
       activitiesList.innerHTML = "<p>Failed to load activities. Please try again later.</p>";
-      console.error("Error fetching activities:", error);
     }
   }
 
@@ -88,6 +112,9 @@ document.addEventListener("DOMContentLoaded", () => {
     }
   });
 
-  // Initialize app
-  fetchActivities();
+  // Initialize app with optimized rendering
+  renderActivities();
+
+  // Refresh data periodically
+  setInterval(renderActivities, CACHE_DURATION);
 });
